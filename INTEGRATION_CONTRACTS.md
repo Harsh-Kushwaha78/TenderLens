@@ -81,3 +81,39 @@ Do not implement these future objects until the relevant feature begins. Finaliz
 4. Notify owners of dependent modules.
 5. Update mocks, fixtures and tests.
 6. Merge the contract change before dependent feature implementation.
+
+---
+
+# Feature 1 — Project Foundation: contract decisions (PROPOSED, pending project-lead review)
+
+Authoritative machine-readable contract: `docs/openapi.yaml`. Server validation: `backend/src/schemas.ts`. Frontend mirror: `frontend/src/api/types.ts`, `frontend/src/lib/{constants,validation}.ts`.
+These were implemented in a sandbox, not in the shared GitHub repo. Per the contract-change procedure, the project lead must review before dependent modules build on them.
+
+## Decisions
+| Topic | Decision |
+|---|---|
+| Money | Decimal **strings** in JSON (`"1000000.00"`), `NUMERIC(15,2)` in PostgreSQL. Max 13 whole digits, 2 decimals. No JS floats for money. Responses always carry 2 fraction digits. |
+| Dates | `plannedStartDate`, `targetCompletionDate`: calendar dates `YYYY-MM-DD` (`DATE`, no timezone). `targetCompletionDate >= plannedStartDate`. |
+| Timestamps | `createdAt`, `updatedAt`: ISO 8601 UTC (`TIMESTAMPTZ`). |
+| IDs | Server-generated UUID. |
+| Naming | camelCase JSON; snake_case columns. |
+| Envelope | Success: `{ "data": ... }` (+ `pagination` for lists). Errors: `{ "error": { code, message, details: [{ field?, message }] } }`. |
+| Error codes | `VALIDATION_ERROR` 400, `BAD_REQUEST` 400 (malformed JSON/too large), `NOT_FOUND` 404, `INVALID_STATUS_TRANSITION` 409, `SERVICE_UNAVAILABLE` 503, `INTERNAL_ERROR` 500. Never stack traces or DB internals. |
+| Statuses | `draft, planning, active, on_hold, completed, cancelled` (from this document). |
+| Transitions (proposed) | draft→planning,cancelled · planning→active,on_hold,cancelled · active→on_hold,completed,cancelled · on_hold→active,cancelled · completed, cancelled are final. Same-status update is allowed. New projects may start only as `draft` or `planning`. |
+| Project types (proposed) | `building_renovation, interior_fitout, civil_works, electrical_works, plumbing_works, other` |
+| Currencies (proposed) | `INR, USD, EUR, GBP, AED`. Currencies are never summed or converted together. |
+| `clientName` | Free-text string. Organization ownership is deliberately not modelled (no auth yet). |
+| `scopeNotes` | **Not added.** `FIRST_FEATURE_PROMPT.md` lists "scope notes" but the contract's Project object has only `description` ("Optional scope summary"); `description` serves that purpose. |
+| Extra fields | `isDemo` (read-only; true only for rows from the dev seed script). |
+| Reserved columns | `projects.organization_id` (nullable UUID, not exposed) reserved for future organization-based ownership/RBAC. `projects.idempotency_key` supports `Idempotency-Key` on create. |
+| Update semantics | `PATCH` partial; `location` replaced as a whole object; `null` clears `description`/`contingencyBudget`/`location.postalCode`; unknown or read-only fields are rejected (400). Concurrency is last-write-wins (row-locked, no ETag/version yet). |
+| Pagination | `page` (≥1), `pageSize` (1–100, default 10); response `pagination: { page, pageSize, totalItems, totalPages }`. |
+| Dashboard rules | "Active" = status `active`. "Approaching" = status in planning/active/on_hold with target date from today through today+30 days; "overdue" = same statuses, target date before today. "Today" uses `APP_TIMEZONE` (default `Asia/Kolkata`). Planned-budget totals exclude `cancelled` projects, grouped per currency. Creation trend is only marked `sufficient` with ≥5 projects across ≥2 of the last 6 months. |
+| Demo data | `isDemo=true` rows are excluded from every endpoint unless `includeDemo=true`; the UI has an explicit "Show demo data" switch and banners. Clients cannot set `isDemo`. |
+| Auth | **None.** Development only. Do not use with real or confidential data. |
+
+## Interfaces future modules should reuse
+- Reference a project by `projectId = projects.id` (UUID). Fetch with `GET /api/projects/:id`. Add child tables with `project_id UUID REFERENCES projects(id)` via a new numbered file in `backend/migrations/`.
+- Future ownership checks should hook in where routes load a project (`backend/src/projects/routes.ts`) and use `projects.organization_id`.
+- Frontend: `src/api/client.ts` (`apiRequest`, `ApiClientError`), `src/components/ui.tsx` primitives, `src/lib/format.ts` (`formatMoney` takes decimal strings).
