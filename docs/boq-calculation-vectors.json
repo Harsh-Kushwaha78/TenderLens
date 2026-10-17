@@ -1,0 +1,153 @@
+{
+ "_comment": "Oracle: Python decimal, ROUND_HALF_UP to 2dp per line; total = sum of rounded line totals. Used by backend AND frontend tests.",
+ "lineTotals": [
+  {
+   "quantity": "1",
+   "rate": "1.00",
+   "lineTotal": "1.00"
+  },
+  {
+   "quantity": "0.001",
+   "rate": "0.01",
+   "lineTotal": "0.00"
+  },
+  {
+   "quantity": "0.005",
+   "rate": "1",
+   "lineTotal": "0.01"
+  },
+  {
+   "quantity": "0.5",
+   "rate": "0.01",
+   "lineTotal": "0.01"
+  },
+  {
+   "quantity": "1.5",
+   "rate": "0.01",
+   "lineTotal": "0.02"
+  },
+  {
+   "quantity": "2.5",
+   "rate": "0.01",
+   "lineTotal": "0.03"
+  },
+  {
+   "quantity": "3",
+   "rate": "0.10",
+   "lineTotal": "0.30"
+  },
+  {
+   "quantity": "0.1",
+   "rate": "0.20",
+   "lineTotal": "0.02"
+  },
+  {
+   "quantity": "12.345",
+   "rate": "67.89",
+   "lineTotal": "838.10"
+  },
+  {
+   "quantity": "10.5",
+   "rate": "99.99",
+   "lineTotal": "1049.90"
+  },
+  {
+   "quantity": "0.333",
+   "rate": "3.00",
+   "lineTotal": "1.00"
+  },
+  {
+   "quantity": "7",
+   "rate": "0",
+   "lineTotal": "0.00"
+  },
+  {
+   "quantity": "1000",
+   "rate": "0.01",
+   "lineTotal": "10.00"
+  },
+  {
+   "quantity": "1234567",
+   "rate": "1234567.89",
+   "lineTotal": "1524156776253.63"
+  },
+  {
+   "quantity": "9999999.999",
+   "rate": "99999999.99",
+   "lineTotal": "999999999800000.00"
+  },
+  {
+   "quantity": "9999999.999",
+   "rate": "0.01",
+   "lineTotal": "100000.00"
+  },
+  {
+   "quantity": "0.001",
+   "rate": "99999999.99",
+   "lineTotal": "100000.00"
+  },
+  {
+   "quantity": "250.125",
+   "rate": "1180.55",
+   "lineTotal": "295285.07"
+  },
+  {
+   "quantity": "18.75",
+   "rate": "4250.00",
+   "lineTotal": "79687.50"
+  }
+ ],
+ "sums": [
+  {
+   "items": [
+    {
+     "quantity": "1",
+     "rate": "0.10"
+    },
+    {
+     "quantity": "1",
+     "rate": "0.20"
+    }
+   ],
+   "total": "0.30"
+  },
+  {
+   "items": [
+    {
+     "quantity": "0.5",
+     "rate": "0.01"
+    },
+    {
+     "quantity": "1.5",
+     "rate": "0.01"
+    },
+    {
+     "quantity": "2.5",
+     "rate": "0.01"
+    }
+   ],
+   "total": "0.06"
+  },
+  {
+   "items": [
+    {
+     "quantity": "9999999.999",
+     "rate": "99999999.99"
+    },
+    {
+     "quantity": "9999999.999",
+     "rate": "99999999.99"
+    },
+    {
+     "quantity": "9999999.999",
+     "rate": "99999999.99"
+    }
+   ],
+   "total": "2999999999400000.00"
+  },
+  {
+   "items": [],
+   "total": "0.00"
+  }
+ ]
+}

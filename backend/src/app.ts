@@ -2,6 +2,7 @@ import cors from 'cors';
 import express, { type ErrorRequestHandler } from 'express';
 import type { Config } from './config.js';
 import type { Pool } from './db.js';
+import { boqsRouter, projectBoqsRouter } from './boq/routes.js';
 import { dashboardRouter } from './dashboard/routes.js';
 import { ApiError } from './errors.js';
 import { projectsRouter } from './projects/routes.js';
@@ -21,7 +22,7 @@ export function createApp(deps: { pool: Pool; config: Pick<Config, 'corsOrigin' 
   const app = express();
   app.disable('x-powered-by');
   app.use((_req, res, next) => { res.setHeader('X-Content-Type-Options', 'nosniff'); next(); });
-  app.use(cors({ origin: config.corsOrigin, exposedHeaders: ['Location', 'Idempotent-Replayed'] }));
+  app.use(cors({ origin: config.corsOrigin, exposedHeaders: ['Location', 'Idempotent-Replayed', 'Content-Disposition'] }));
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/api/health', async (_req, res, next) => {
@@ -30,7 +31,9 @@ export function createApp(deps: { pool: Pool; config: Pick<Config, 'corsOrigin' 
       res.json({ data: { status: 'ok', database: 'up' } });
     } catch (e) { next(e); }
   });
+  app.use('/api/projects/:projectId/boqs', projectBoqsRouter(pool));
   app.use('/api/projects', projectsRouter(pool));
+  app.use('/api/boqs', boqsRouter(pool));
   app.use('/api/dashboard', dashboardRouter(pool, config.appTimezone));
 
   app.use((_req, _res, next) => next(new ApiError(404, 'NOT_FOUND', 'Route not found.')));
