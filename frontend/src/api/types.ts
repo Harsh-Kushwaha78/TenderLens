@@ -75,3 +75,42 @@ export interface DashboardSummary {
 }
 
 export interface ApiErrorDetail { field?: string; message: string }
+
+/* ---------------- Feature 2: BOQ ---------------- */
+export type BoqUnit = 'm' | 'm2' | 'm3' | 'sqft' | 'kg' | 'tonne' | 'litre' | 'piece' | 'set' | 'bag' | 'day' | 'lump_sum';
+
+export interface BoqItem {
+  id: string;
+  position: number;
+  description: string;
+  specifications: string | null;
+  quantity: DecimalString; // 3 decimals
+  unit: BoqUnit;
+  estimatedRate: DecimalString | null; // 2 decimals; null = not yet estimated (NOT zero)
+  lineTotal: DecimalString | null; // server-derived; null when no rate
+}
+export interface Boq {
+  id: string;
+  projectId: string;
+  title: string;
+  description: string | null;
+  currency: Currency; // snapshot of the project's currency at creation
+  revision: number; // optimistic-concurrency token
+  total: DecimalString; // server-derived sum of line totals
+  pricedItemCount: number;
+  unpricedItemCount: number;
+  items: BoqItem[];
+  project: { id: string; name: string; clientName: string; location: { city: string; state: string; postalCode: string | null }; currency: Currency; isDemo: boolean };
+  createdAt: string;
+  updatedAt: string;
+}
+export interface BoqSummary {
+  id: string; projectId: string; title: string; currency: Currency; revision: number;
+  itemCount: number; unpricedItemCount: number; total: DecimalString; createdAt: string; updatedAt: string;
+}
+/** Items never carry position/lineTotal/total: the server derives them. `id: null` = new item. */
+export interface BoqItemInput {
+  id: string | null; description: string; specifications: string | null; quantity: DecimalString; unit: BoqUnit; estimatedRate: DecimalString | null;
+}
+export interface CreateBoqRequest { title: string; description: string | null; items: BoqItemInput[] }
+export interface UpdateBoqRequest extends CreateBoqRequest { revision: number }

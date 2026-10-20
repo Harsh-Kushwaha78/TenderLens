@@ -14,7 +14,7 @@ export function BrandMark({ size = 30 }: { size?: number }) {
 }
 
 const FUTURE = [
-  { label: 'BOQ & Documents', icon: FileText },
+  { label: 'Document OCR', icon: FileText },
   { label: 'Price Intelligence', icon: BarChart3 },
   { label: 'Quotations', icon: Receipt },
   { label: 'Milestones', icon: ListChecks },

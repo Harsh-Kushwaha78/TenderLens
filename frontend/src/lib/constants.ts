@@ -31,3 +31,11 @@ export const SORT_LABELS: Record<SortField, string> = {
   createdAt: 'Date created', name: 'Project name', plannedBudget: 'Planned budget', targetCompletionDate: 'Target completion',
 };
 export const SORT_FIELDS = Object.keys(SORT_LABELS) as SortField[];
+
+/* ---------------- Feature 2: BOQ ---------------- */
+import type { BoqUnit } from '../api/types';
+export const BOQ_UNITS: BoqUnit[] = ['m', 'm2', 'm3', 'sqft', 'kg', 'tonne', 'litre', 'piece', 'set', 'bag', 'day', 'lump_sum'];
+export const UNIT_LABELS: Record<BoqUnit, string> = {
+  m: 'm', m2: 'm²', m3: 'm³', sqft: 'sq ft', kg: 'kg', tonne: 'tonne', litre: 'litre', piece: 'piece', set: 'set', bag: 'bag', day: 'day', lump_sum: 'lump sum',
+};
+export const MAX_BOQ_ITEMS = 500;
