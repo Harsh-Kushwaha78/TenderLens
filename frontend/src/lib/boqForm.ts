@@ -20,7 +20,7 @@ export const emptyForm = (): BoqFormValues => ({ title: '', description: '', row
 
 export const formFromBoq = (b: Boq): BoqFormValues => ({
   title: b.title, description: b.description ?? '',
-  rows: b.items.map((i) => ({ key: newKey(), id: i.id, description: i.description, specifications: i.specifications ?? '', quantity: trimQuantity(i.quantity), unit: i.unit, rate: i.estimatedRate ?? '' })),
+  rows: b.items.map((i) => ({ key: newKey(), id: i.id, description: i.description, specifications: i.specifications ?? '', quantity: trimQuantity(i.quantity), unit: i.unit, rate: i.estimatedUnitRate ?? '' })),
 });
 
 export const rowHasContent = (r: BoqRow) => Boolean(r.description.trim() || r.specifications.trim() || r.quantity.trim() || r.rate.trim() || r.unit);
@@ -57,7 +57,7 @@ export const hasErrors = (e: BoqErrors) => Boolean(e.title || e.description || e
 export function toItemInputs(rows: BoqRow[]): BoqItemInput[] {
   return rows.map((r) => ({
     id: r.id, description: r.description.trim(), specifications: r.specifications.trim() || null,
-    quantity: r.quantity.trim(), unit: r.unit as BoqUnit, estimatedRate: r.rate.trim() || null,
+    quantity: r.quantity.trim(), unit: r.unit as BoqUnit, estimatedUnitRate: r.rate.trim() || null,
   }));
 }
 export const toPayload = (v: BoqFormValues): CreateBoqRequest => ({ title: v.title.trim(), description: v.description.trim() || null, items: toItemInputs(v.rows) });
@@ -74,7 +74,7 @@ export function mapServerErrors(details: ApiErrorDetail[], rows: BoqRow[]): { er
     const m = /^items\.(\d+)\.(\w+)$/.exec(f);
     if (m) {
       const row = rows[Number(m[1])];
-      const field = m[2] === 'estimatedRate' ? 'rate' : (m[2] ?? '');
+      const field = m[2] === 'estimatedUnitRate' ? 'rate' : (m[2] ?? '');
       if (row && ['description', 'specifications', 'quantity', 'unit', 'rate'].includes(field)) { (errors.rows[row.key] ??= {})[field as RowField] ??= d.message; continue; }
       general.push(`Item ${Number(m[1]) + 1}: ${d.message}`); continue;
     }

@@ -135,7 +135,7 @@ export function renderBoqPdf(boq: Boq, opts: RenderOptions = {}): Promise<Buffer
       doc.fillColor('#0f172a');
       cellText(fmt(qtyNf, it.quantity), xs[2]! + PAD, y + PAD, COLS[2] - 2 * PAD, 'right');
       cellText(UNIT_LABELS[it.unit] ?? it.unit, xs[3]! + PAD, y + PAD, COLS[3] - 2 * PAD, 'left');
-      cellText(it.estimatedRate === null ? '—' : fmt(moneyNf, it.estimatedRate), xs[4]! + PAD, y + PAD, COLS[4] - 2 * PAD, 'right');
+      cellText(it.estimatedUnitRate === null ? '—' : fmt(moneyNf, it.estimatedUnitRate), xs[4]! + PAD, y + PAD, COLS[4] - 2 * PAD, 'right');
       cellText(it.lineTotal === null ? '—' : fmt(moneyNf, it.lineTotal), xs[5]! + PAD, y + PAD, COLS[5] - 2 * PAD, 'right', 'B');
       doc.moveTo(L, y + rowH).lineTo(L + W, y + rowH).strokeColor('#e3e8f2').lineWidth(0.5).stroke();
       doc.y = y + rowH;

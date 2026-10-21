@@ -37,7 +37,7 @@ const itemSchema = z.object({
   specifications: optionalText('Specifications', 1000),
   quantity,
   unit: z.enum(BOQ_UNITS, { errorMap: () => ({ message: `Unit must be one of: ${BOQ_UNITS.join(', ')}.` }) }),
-  estimatedRate: rate,
+  estimatedUnitRate: rate,
 }).strict();
 
 const boqFields = {

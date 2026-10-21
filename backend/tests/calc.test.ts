@@ -28,21 +28,21 @@ describe('BOQ exact arithmetic (shared vectors, independent Python-decimal oracl
 });
 
 describe('BOQ request schemas', () => {
-  const item = { description: 'Brickwork', quantity: '10', unit: 'm3', estimatedRate: '100' };
+  const item = { description: 'Brickwork', quantity: '10', unit: 'm3', estimatedUnitRate: '100' };
   it('accepts valid input and normalises decimals', () => {
     const r = createBoqSchema.parse({ title: 'Ground floor', items: [item] });
-    expect(r.items[0]).toMatchObject({ quantity: '10.000', estimatedRate: '100.00', specifications: null, id: null });
+    expect(r.items[0]).toMatchObject({ quantity: '10.000', estimatedUnitRate: '100.00', specifications: null, id: null });
   });
   it.each([
     ['numeric quantity', { quantity: 10 }], ['negative quantity', { quantity: '-1' }], ['zero quantity', { quantity: '0' }], ['zero with decimals', { quantity: '0.000' }],
     ['4 decimal quantity', { quantity: '1.2345' }], ['8 whole-digit quantity', { quantity: '12345678' }], ['exponent', { quantity: '1e3' }], ['comma', { quantity: '1,000' }],
-    ['negative rate', { estimatedRate: '-0.01' }], ['3 decimal rate', { estimatedRate: '1.234' }], ['numeric rate', { estimatedRate: 5 }], ['9 whole-digit rate', { estimatedRate: '123456789' }],
+    ['negative rate', { estimatedUnitRate: '-0.01' }], ['3 decimal rate', { estimatedUnitRate: '1.234' }], ['numeric rate', { estimatedUnitRate: 5 }], ['9 whole-digit rate', { estimatedUnitRate: '123456789' }],
     ['bad unit', { unit: 'cubits' }], ['empty description', { description: '  ' }], ['client lineTotal', { lineTotal: '1.00' }], ['client position', { position: 3 }],
   ])('rejects %s', (_l, over) => {
     expect(createBoqSchema.safeParse({ title: 'Ground floor', items: [{ ...item, ...over }] }).success).toBe(false);
   });
   it('allows a zero rate and a missing rate; rejects a client total and >500 items', () => {
-    expect(createBoqSchema.safeParse({ title: 'Ground floor', items: [{ ...item, estimatedRate: '0' }, { ...item, estimatedRate: null }, { ...item, estimatedRate: undefined }] }).success).toBe(true);
+    expect(createBoqSchema.safeParse({ title: 'Ground floor', items: [{ ...item, estimatedUnitRate: '0' }, { ...item, estimatedUnitRate: null }, { ...item, estimatedUnitRate: undefined }] }).success).toBe(true);
     expect(createBoqSchema.safeParse({ title: 'Ground floor', total: '1.00', items: [] }).success).toBe(false);
     expect(createBoqSchema.safeParse({ title: 'Ground floor', items: Array(501).fill(item) }).success).toBe(false);
   });

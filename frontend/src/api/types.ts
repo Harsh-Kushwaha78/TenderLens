@@ -86,8 +86,9 @@ export interface BoqItem {
   specifications: string | null;
   quantity: DecimalString; // 3 decimals
   unit: BoqUnit;
-  estimatedRate: DecimalString | null; // 2 decimals; null = not yet estimated (NOT zero)
+  estimatedUnitRate: DecimalString | null; // 2 decimals; null = not yet estimated (NOT zero)
   lineTotal: DecimalString | null; // server-derived; null when no rate
+  source: 'manual'; // read-only origin of the item (future OCR/import will add values)
 }
 export interface Boq {
   id: string;
@@ -110,7 +111,7 @@ export interface BoqSummary {
 }
 /** Items never carry position/lineTotal/total: the server derives them. `id: null` = new item. */
 export interface BoqItemInput {
-  id: string | null; description: string; specifications: string | null; quantity: DecimalString; unit: BoqUnit; estimatedRate: DecimalString | null;
+  id: string | null; description: string; specifications: string | null; quantity: DecimalString; unit: BoqUnit; estimatedUnitRate: DecimalString | null;
 }
 export interface CreateBoqRequest { title: string; description: string | null; items: BoqItemInput[] }
 export interface UpdateBoqRequest extends CreateBoqRequest { revision: number }

@@ -111,7 +111,7 @@ function BoqPaper({ boq }: { boq: Boq }) {
                 <td><span className="prewrap">{i.description}</span>{i.specifications && <div className="spec prewrap">{i.specifications}</div>}</td>
                 <td className="num">{trimQuantity(i.quantity)}</td>
                 <td>{UNIT_LABELS[i.unit]}</td>
-                <td className="num">{i.estimatedRate === null ? '—' : formatMoneyFixed(i.estimatedRate, boq.currency)}</td>
+                <td className="num">{i.estimatedUnitRate === null ? '—' : formatMoneyFixed(i.estimatedUnitRate, boq.currency)}</td>
                 <td className="num strong">{i.lineTotal === null ? '—' : formatMoneyFixed(i.lineTotal, boq.currency)}</td>
               </tr>
             ))}

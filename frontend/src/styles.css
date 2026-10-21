@@ -228,7 +228,7 @@ input:focus-visible, select:focus-visible, textarea:focus-visible { outline: non
 .boq-table th.num, .boq-table td.num { text-align: right; }
 .boq-table td { padding: 10px 8px; border-bottom: 1px solid #eef1f7; vertical-align: top; }
 .boq-table td.no { color: var(--muted); padding-top: 18px; width: 40px; }
-.boq-table td:nth-child(2) { min-width: 260px; } .boq-table td:nth-child(3) { width: 120px; } .boq-table td:nth-child(4) { width: 120px; } .boq-table td:nth-child(5) { width: 130px; }
+.boq-table td:nth-child(2) { min-width: 260px; } .boq-table td:nth-child(3) { width: 120px; } .boq-table td:nth-child(4) { width: 136px; } .boq-table td:nth-child(5) { width: 130px; }
 .boq-table .amount { padding-top: 18px; white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; min-width: 130px; }
 .boq-table textarea { resize: vertical; min-height: 56px; }
 .spec-input { margin-top: 6px; font-size: 13px; min-height: 34px; padding: 6px 10px; }

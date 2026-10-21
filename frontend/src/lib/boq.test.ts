@@ -40,7 +40,7 @@ describe('boqForm', () => {
     expect(validateForm({ title: 'x', description: '', rows: [row()] }).title).toMatch(/at least 3/);
     const r = row({ id: 'abc', specifications: '  ', rate: '' });
     const p = toPayload({ title: ' Ground ', description: '  ', rows: [r] });
-    expect(p).toEqual({ title: 'Ground', description: null, items: [{ id: 'abc', description: 'Brickwork', specifications: null, quantity: '10', unit: 'm3', estimatedRate: null }] });
+    expect(p).toEqual({ title: 'Ground', description: null, items: [{ id: 'abc', description: 'Brickwork', specifications: null, quantity: '10', unit: 'm3', estimatedUnitRate: null }] });
     expect(Object.keys(p.items[0]!)).not.toContain('lineTotal');
   });
   it('dirty snapshot ignores client keys but sees edits and reordering', () => {
@@ -51,9 +51,34 @@ describe('boqForm', () => {
   });
   it('maps server error paths onto rows', () => {
     const rows = [row(), row()];
-    const m = mapServerErrors([{ field: 'items.1.estimatedRate', message: 'bad rate' }, { field: 'title', message: 'bad title' }, { field: 'revision', message: 'stale' }], rows);
+    const m = mapServerErrors([{ field: 'items.1.estimatedUnitRate', message: 'bad rate' }, { field: 'title', message: 'bad title' }, { field: 'revision', message: 'stale' }], rows);
     expect(m.errors.rows[rows[1]!.key]).toEqual({ rate: 'bad rate' });
     expect(m.errors.title).toBe('bad title');
     expect(m.general).toEqual(['stale']);
+  });
+});
+
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { BOQ_UNITS, MAX_BOQ_ITEMS, UNIT_LABELS } from './constants';
+import { QUANTITY_RE, RATE_RE } from './boqMath';
+
+describe('frontend <-> OpenAPI contract (docs/openapi.yaml is the shared source)', () => {
+  const spec = readFileSync(resolve(process.cwd(), '../docs/openapi.yaml'), 'utf8') // vitest runs with cwd = frontend/;
+  it('uses the same unit codes as the API, each with a label', () => {
+    const m = /BoqUnit: \{ type: string, enum: \[([^\]]+)\]/.exec(spec);
+    expect(m).not.toBeNull();
+    expect(m![1]!.split(',').map((s) => s.trim())).toEqual(BOQ_UNITS);
+    BOQ_UNITS.forEach((u) => expect(UNIT_LABELS[u]).toBeTruthy());
+  });
+  it('accepts/rejects the same quantity and rate strings as the documented patterns', () => {
+    const pat = (name: string) => new RegExp(new RegExp(`${name}: \\{[^}]*?pattern: '([^']+)'`).exec(spec)![1]!);
+    const samples = ['0', '1', '12.5', '12.500', '7.125', '1.2345', '12345678', '9999999.999', '-1', '1e3', '1,000', '01', '.5', '5.', '', '99999999.99', '123456789', '0.001'];
+    for (const [name, re] of [['BoqQuantity', QUANTITY_RE], ['BoqRate', RATE_RE]] as const) {
+      for (const v of samples) expect(pat(name).test(v), `${name} ${JSON.stringify(v)}`).toBe(re.test(v));
+    }
+  });
+  it('uses the documented item limit', () => {
+    expect(new RegExp(`maxItems: ${MAX_BOQ_ITEMS}`).test(spec)).toBe(true);
   });
 });

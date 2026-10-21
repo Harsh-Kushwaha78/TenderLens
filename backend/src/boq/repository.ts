@@ -8,7 +8,8 @@ type Db = Pick<pg.Pool, 'query'>;
 
 export interface BoqItem {
   id: string; position: number; description: string; specifications: string | null;
-  quantity: string; unit: BoqUnit; estimatedRate: string | null; lineTotal: string | null;
+  quantity: string; unit: BoqUnit; estimatedUnitRate: string | null; lineTotal: string | null;
+  source: 'manual'; // origin of the item; only 'manual' exists until OCR/import features add others
 }
 export interface BoqProjectRef {
   id: string; name: string; clientName: string; location: { city: string; state: string; postalCode: string | null };
@@ -36,11 +37,11 @@ export async function getBoq(db: Db, id: string): Promise<Boq | null> {
   const r = b.rows[0];
   if (!r) return null;
   const it = await db.query(
-    `SELECT id, position, description, specifications, quantity, unit, estimated_rate, line_total
+    `SELECT id, position, description, specifications, quantity, unit, estimated_rate, line_total, source
      FROM boq_items WHERE boq_id = $1 ORDER BY position`, [id]);
   const items: BoqItem[] = it.rows.map((x) => ({
     id: x.id, position: x.position, description: x.description, specifications: x.specifications ?? null,
-    quantity: x.quantity, unit: x.unit, estimatedRate: x.estimated_rate ?? null, lineTotal: x.line_total ?? null,
+    quantity: x.quantity, unit: x.unit, estimatedUnitRate: x.estimated_rate ?? null, lineTotal: x.line_total ?? null, source: x.source,
   }));
   const priced = items.filter((i) => i.lineTotal !== null);
   const total = fromMinor(priced.reduce((s, i) => s + toMinor(i.lineTotal!), 0n));
@@ -99,7 +100,7 @@ async function upsertItems(c: pg.PoolClient, boqId: string, items: CreateBoqInpu
        estimated_rate = EXCLUDED.estimated_rate, updated_at = now()
      WHERE boq_items.boq_id = EXCLUDED.boq_id`,
     [boqId, items.map((i) => i.id), items.map((_, n) => n + 1), items.map((i) => i.description),
-     items.map((i) => i.specifications), items.map((i) => i.quantity), items.map((i) => i.unit), items.map((i) => i.estimatedRate)],
+     items.map((i) => i.specifications), items.map((i) => i.quantity), items.map((i) => i.unit), items.map((i) => i.estimatedUnitRate)],
   );
 }
 

@@ -117,3 +117,50 @@ These were implemented in a sandbox, not in the shared GitHub repo. Per the cont
 - Reference a project by `projectId = projects.id` (UUID). Fetch with `GET /api/projects/:id`. Add child tables with `project_id UUID REFERENCES projects(id)` via a new numbered file in `backend/migrations/`.
 - Future ownership checks should hook in where routes load a project (`backend/src/projects/routes.ts`) and use `projects.organization_id`.
 - Frontend: `src/api/client.ts` (`apiRequest`, `ApiClientError`), `src/components/ui.tsx` primitives, `src/lib/format.ts` (`formatMoney` takes decimal strings).
+
+---
+
+# Feature 2 — BOQ Builder + Document Generation: contract decisions (PROPOSED, pending project-lead review)
+
+Machine-readable contract: `docs/openapi.yaml` (v0.2.0). Backend validation: `backend/src/boq/schemas.ts`. Exact arithmetic: `backend/src/boq/calc.ts` (server) and `frontend/src/lib/boqMath.ts` (live preview), both tested against the shared vectors in `docs/boq-calculation-vectors.json` (generated with an independent Python-decimal oracle). `backend/tests/contract.test.ts` fails if the OpenAPI file and the implementation drift apart (routes, status codes, enums, regexes, request fields, response fields).
+
+## Data model (migration `002_create_boqs.sql`, forward-only, does not alter Feature 1 tables)
+- `boqs`: `id` UUID, `project_id` UUID → `projects(id)` **ON DELETE RESTRICT** (a project with BOQs cannot be deleted), `title`, `description`, `currency` (snapshot of the project's currency at creation), `revision` (optimistic concurrency, starts at 1), `created_at`, `updated_at`.
+- `boq_items`: `id` UUID, `boq_id` → `boqs(id)` **ON DELETE CASCADE**, `position` (unique per BOQ, deferrable so reordering is atomic), `description`, `specifications`, `quantity NUMERIC(10,3)`, `unit`, `estimated_rate NUMERIC(10,2)` (nullable), `line_total NUMERIC(18,2) GENERATED ALWAYS AS (round(quantity * estimated_rate, 2)) STORED`, `source` ('manual'), timestamps.
+
+## Decisions
+| Topic | Decision |
+|---|---|
+| Resource shape | BOQ belongs to one project; items belong to one BOQ. Items are addressed only through their BOQ. Item `projectId` from the starter contract is available as `boq.projectId`. |
+| Item fields (starter contract → implemented) | `id`, `description`, `specifications`, `quantity`, `unit`, `estimatedUnitRate` (**name as in the starter contract**), `source` (read-only, `manual`), plus `position` and `lineTotal` (server-derived). `canonicalItemId`, `matchStatus`, `confidence` are **not** implemented (future pricing/OCR features add them by migration). `category` was not added (no clear purpose; `specifications` covers it). |
+| Quantity | Decimal string, **> 0**, max 7 whole digits + 3 decimals (`"12.500"`). |
+| Rate | Decimal string **≥ 0** (zero allowed), max 8 whole digits + 2 decimals. **Missing/`null` rate = "not estimated yet", not zero**: `lineTotal` is `null` and the item is excluded from the total; the UI and PDF flag such items. |
+| Line total | `round(quantity × rate, 2)`, half-up. Computed by PostgreSQL (generated column) and mirrored in BigInt JS. Clients can never send it (strict schemas → 400). |
+| BOQ total | Sum of line totals of priced items, 2 decimals. **Base total only: no GST/tax, overheads, contingency or adjustments.** Returned as `total` with `pricedItemCount`/`unpricedItemCount`. |
+| Limits | 3–150 char title, ≤2000 description, 1–1000 item description, ≤1000 specifications, ≤500 items per BOQ. Max line total ≈ 10^15, max BOQ total ≈ 10^18 (fits NUMERIC(18,2) lines and an unbounded exact sum). |
+| Currency | The BOQ keeps the project's currency from creation time (INR/USD/EUR/GBP/AED as in Feature 1). Changing the project currency later does **not** change or convert existing BOQs (UI shows a note). |
+| Units | `m, m2, m3, sqft, kg, tonne, litre, piece, set, bag, day, lump_sum` (labels m, m², m³, sq ft, …). Proposed starter set. |
+| IDs | UUIDs, server-generated. New items are sent without `id`. On `PUT`, an item `id` must already belong to **that** BOQ; otherwise 400 (prevents cross-BOQ / cross-project hijacking). |
+| Ordering | `position` = array order (1..n), assigned by the server. |
+| Concurrency | `PUT` must send the `revision` it loaded; mismatch → **409 `CONFLICT`**, nothing changes. Each successful `PUT` increments `revision`. |
+| Atomicity | Create and replace run in one transaction (BOQ metadata + deletes + upserts + revision bump). Verified by a rollback test with an injected failure. |
+| Lifecycle | No approval/status workflow exists yet (no authentication or authority model), so there is no BOQ `status`. Every PDF is explicitly marked "DRAFT - not an approved or issued tender document". Deletion is always allowed (UI asks for confirmation). |
+| New error codes | `CONFLICT` (409), `UNSUPPORTED_CHARACTERS` (422), `DOCUMENT_GENERATION_FAILED` (500). |
+
+## Endpoints
+`GET|POST /api/projects/{projectId}/boqs` · `GET|PUT|DELETE /api/boqs/{id}` · `GET /api/boqs/{id}/pdf[?revision=N]`. See OpenAPI for schemas and status codes. `PUT` is a full replace (omitted saved items are deleted).
+
+## Document generation interface
+- Server-side with PDFKit; generated **on demand from the saved database row**, never from client data. It does not write anything.
+- `?revision=N` pins the export to the revision the user previewed (409 if it changed).
+- Filename `TenderLens-BOQ-<first 8 chars of BOQ id>-r<revision>.pdf` (no titles, client or project names). Headers: `application/pdf`, `attachment`, `Cache-Control: no-store`.
+- Contents: header on every page, project/client/location, currency, revision, generation timestamp (UTC), scope, table with repeating header, total block with the base-total caveat, "Page x of n".
+- Font: embedded DejaVu Sans (Latin/Greek/Cyrillic, ₹, ², ³). Text it cannot draw (e.g. Devanagari, CJK) is **rejected with 422 listing the offending fields** rather than producing a corrupted PDF.
+- No contractor/organization identity, address or signature is invented; none is available as a data source yet.
+
+## Frontend routes
+`/projects/:projectId/boqs` (list) · `/projects/:projectId/boqs/new` · `/boqs/:id` (saved view = document preview + PDF download + delete) · `/boqs/:id/edit`. Entry point: "Bill of Quantities" card on the project detail page. The app now uses a React Router *data router* (`createBrowserRouter`) so the editor can block navigation while changes are unsaved.
+
+## Integration notes for other modules
+- OCR/BOQ import should create items with `source` other than `manual` (extend the CHECK constraint in a new migration) and keep the raw text in `description`.
+- Pricing should read `description`/`specifications`/`unit`/`quantity` and write its own tables; it must not write `estimated_rate` implicitly.

@@ -20,7 +20,7 @@ const mkProject = async (over: Record<string, unknown> = {}) => {
   expect(r.status).toBe(201);
   return r.body.data as any;
 };
-const item = (over: Record<string, unknown> = {}) => ({ description: 'Brickwork in cement mortar', quantity: '10', unit: 'm3', estimatedRate: '5000', ...over });
+const item = (over: Record<string, unknown> = {}) => ({ description: 'Brickwork in cement mortar', quantity: '10', unit: 'm3', estimatedUnitRate: '5000', ...over });
 const mkBoq = async (projectId: string, over: Record<string, unknown> = {}) => {
   const r = await request(app).post(`/api/projects/${projectId}/boqs`).send({ title: 'Ground floor works', items: [item()], ...over });
   expect(r.status, JSON.stringify(r.body)).toBe(201);
@@ -28,7 +28,7 @@ const mkBoq = async (projectId: string, over: Record<string, unknown> = {}) => {
 };
 const toInput = (b: any, items = b.items) => ({
   title: b.title, description: b.description, revision: b.revision,
-  items: items.map((i: any) => ({ id: i.id ?? null, description: i.description, specifications: i.specifications, quantity: i.quantity, unit: i.unit, estimatedRate: i.estimatedRate })),
+  items: items.map((i: any) => ({ id: i.id ?? null, description: i.description, specifications: i.specifications, quantity: i.quantity, unit: i.unit, estimatedUnitRate: i.estimatedUnitRate })),
 });
 
 beforeAll(async () => { await runMigrations(pool); });
@@ -39,12 +39,12 @@ describe('POST /api/projects/:projectId/boqs', () => {
   it('creates a BOQ with server-derived positions, line totals and total; snapshots project currency', async () => {
     const p = await mkProject({ currency: 'USD' });
     const res = await request(app).post(`/api/projects/${p.id}/boqs`).send({
-      title: 'Ground floor works', description: 'Scope', items: [item(), item({ description: 'Plaster', quantity: '2.5', unit: 'm2', estimatedRate: '120.40', specifications: '12 mm' })] });
+      title: 'Ground floor works', description: 'Scope', items: [item(), item({ description: 'Plaster', quantity: '2.5', unit: 'm2', estimatedUnitRate: '120.40', specifications: '12 mm' })] });
     expect(res.status).toBe(201);
     const b = res.body.data;
     expect(res.headers.location).toBe(`/api/boqs/${b.id}`);
     expect(b).toMatchObject({ projectId: p.id, currency: 'USD', revision: 1, total: '50301.00', pricedItemCount: 2, unpricedItemCount: 0, description: 'Scope' });
-    expect(b.items.map((i: any) => [i.position, i.quantity, i.estimatedRate, i.lineTotal])).toEqual([[1, '10.000', '5000.00', '50000.00'], [2, '2.500', '120.40', '301.00']]);
+    expect(b.items.map((i: any) => [i.position, i.quantity, i.estimatedUnitRate, i.lineTotal])).toEqual([[1, '10.000', '5000.00', '50000.00'], [2, '2.500', '120.40', '301.00']]);
     expect(b.items[1].specifications).toBe('12 mm');
     expect(b.project).toMatchObject({ id: p.id, name: 'Office Renovation', isDemo: false });
     expect(new Date(b.createdAt).toISOString()).toBe(b.createdAt);
@@ -62,7 +62,7 @@ describe('POST /api/projects/:projectId/boqs', () => {
   it('allows an empty BOQ and treats a missing rate as unpriced (not zero)', async () => {
     const p = await mkProject();
     expect((await mkBoq(p.id, { items: [] })).total).toBe('0.00');
-    const b = await mkBoq(p.id, { items: [item({ estimatedRate: undefined, quantity: '3' }), item({ estimatedRate: '0' })] });
+    const b = await mkBoq(p.id, { items: [item({ estimatedUnitRate: undefined, quantity: '3' }), item({ estimatedUnitRate: '0' })] });
     expect(b.items.map((i: any) => i.lineTotal)).toEqual([null, '0.00']);
     expect(b).toMatchObject({ total: '0.00', pricedItemCount: 1, unpricedItemCount: 1 });
   });
@@ -78,10 +78,10 @@ describe('POST /api/projects/:projectId/boqs', () => {
 
   it('validates with field paths; never accepts client totals/positions; rejects ids on create', async () => {
     const p = await mkProject();
-    const r = await request(app).post(`/api/projects/${p.id}/boqs`).send({ title: 'x', items: [item({ quantity: '-1' }), item({ unit: 'bad' }), item({ estimatedRate: '1.234' })] });
+    const r = await request(app).post(`/api/projects/${p.id}/boqs`).send({ title: 'x', items: [item({ quantity: '-1' }), item({ unit: 'bad' }), item({ estimatedUnitRate: '1.234' })] });
     expect(r.status).toBe(400);
     expect(r.body.error.code).toBe('VALIDATION_ERROR');
-    expect(r.body.error.details.map((d: any) => d.field)).toEqual(expect.arrayContaining(['title', 'items.0.quantity', 'items.1.unit', 'items.2.estimatedRate']));
+    expect(r.body.error.details.map((d: any) => d.field)).toEqual(expect.arrayContaining(['title', 'items.0.quantity', 'items.1.unit', 'items.2.estimatedUnitRate']));
     const smuggled = await request(app).post(`/api/projects/${p.id}/boqs`).send({ title: 'Ground floor works', total: '1.00', items: [item({ lineTotal: '1.00' })] });
     expect(smuggled.status).toBe(400);
     const withId = await request(app).post(`/api/projects/${p.id}/boqs`).send({ title: 'Ground floor works', items: [item({ id: '11111111-1111-4111-8111-111111111111' })] });
@@ -93,7 +93,7 @@ describe('POST /api/projects/:projectId/boqs', () => {
   it('matches the independent oracle for every shared calculation vector (DB generated column == JS)', async () => {
     const p = await mkProject();
     const rows = vectors.lineTotals;
-    const b = await mkBoq(p.id, { items: rows.map((v: any, n: number) => item({ description: `Vector ${n}`, quantity: v.quantity, estimatedRate: v.rate })) });
+    const b = await mkBoq(p.id, { items: rows.map((v: any, n: number) => item({ description: `Vector ${n}`, quantity: v.quantity, estimatedUnitRate: v.rate })) });
     expect(b.items.map((i: any) => i.lineTotal)).toEqual(rows.map((v: any) => v.lineTotal));
     const expected = rows.reduce((s: bigint, v: any) => s + BigInt(v.lineTotal.replace('.', '')), 0n).toString().padStart(3, '0');
     expect(b.total).toBe(`${expected.slice(0, -2)}.${expected.slice(-2)}`);
@@ -102,7 +102,7 @@ describe('POST /api/projects/:projectId/boqs', () => {
   it.each([0, 1, 2])('sums large values exactly (sum vector %i)', async (n) => {
     const s = vectors.sums[n];
     const p = await mkProject();
-    const b = await mkBoq(p.id, { items: s.items.map((x: any) => item({ quantity: x.quantity, estimatedRate: x.rate })) });
+    const b = await mkBoq(p.id, { items: s.items.map((x: any) => item({ quantity: x.quantity, estimatedUnitRate: x.rate })) });
     expect(b.total).toBe(s.total);
   });
 
@@ -116,7 +116,7 @@ describe('POST /api/projects/:projectId/boqs', () => {
 describe('GET /api/projects/:projectId/boqs and /api/boqs/:id', () => {
   it('lists only this project\'s BOQs with aggregated counts and totals', async () => {
     const a = await mkProject(); const other = await mkProject({ name: 'Other Project' });
-    await mkBoq(a.id, { title: 'First BOQ', items: [item(), item({ estimatedRate: undefined })] });
+    await mkBoq(a.id, { title: 'First BOQ', items: [item(), item({ estimatedUnitRate: undefined })] });
     await mkBoq(other.id, { title: 'Foreign BOQ' });
     const r = await request(app).get(`/api/projects/${a.id}/boqs`);
     expect(r.status).toBe(200);
@@ -148,7 +148,7 @@ describe('PUT /api/boqs/:id', () => {
     const p = await mkProject();
     const b = await mkBoq(p.id, { items: [item({ description: 'A' }), item({ description: 'B' }), item({ description: 'C' })] });
     const [A, B, C] = b.items;
-    const input = toInput(b, [C, { ...A, quantity: '4', description: 'A edited' }, { id: null, description: 'D new', specifications: null, quantity: '1', unit: 'day', estimatedRate: '99.99' }]);
+    const input = toInput(b, [C, { ...A, quantity: '4', description: 'A edited' }, { id: null, description: 'D new', specifications: null, quantity: '1', unit: 'day', estimatedUnitRate: '99.99' }]);
     input.title = 'Renamed BOQ';
     const r = await request(app).put(`/api/boqs/${b.id}`).send(input);
     expect(r.status, JSON.stringify(r.body)).toBe(200);
@@ -209,7 +209,7 @@ describe('PUT /api/boqs/:id', () => {
       IF NEW.description = 'BOOM' THEN RAISE EXCEPTION 'forced failure'; END IF; RETURN NEW; END $$ LANGUAGE plpgsql`);
     await pool.query('CREATE TRIGGER boq_test_fail BEFORE INSERT OR UPDATE ON boq_items FOR EACH ROW EXECUTE FUNCTION boq_test_fail()');
     try {
-      const input = toInput(b, [b.items[0], { id: null, description: 'BOOM', specifications: null, quantity: '1', unit: 'm', estimatedRate: '1' }]);
+      const input = toInput(b, [b.items[0], { id: null, description: 'BOOM', specifications: null, quantity: '1', unit: 'm', estimatedUnitRate: '1' }]);
       input.title = 'Should not persist';
       const r = await request(app).put(`/api/boqs/${b.id}`).send(input);
       expect(r.status).toBe(500);
@@ -262,7 +262,7 @@ describe('GET /api/boqs/:id/pdf', () => {
     expect(body.subarray(-8).toString()).toContain('%%EOF');
   });
   it('does not modify saved data', async () => {
-    const p = await mkProject(); const b = await mkBoq(p.id, { items: [item(), item({ estimatedRate: undefined })] });
+    const p = await mkProject(); const b = await mkBoq(p.id, { items: [item(), item({ estimatedUnitRate: undefined })] });
     const before = await pool.query('SELECT (SELECT row_to_json(x) FROM boqs x WHERE id=$1) AS b, (SELECT json_agg(i ORDER BY position) FROM boq_items i WHERE boq_id=$1) AS items', [b.id]);
     for (let n = 0; n < 2; n++) expect((await request(app).get(`/api/boqs/${b.id}/pdf`)).status).toBe(200);
     const after = await pool.query('SELECT (SELECT row_to_json(x) FROM boqs x WHERE id=$1) AS b, (SELECT json_agg(i ORDER BY position) FROM boq_items i WHERE boq_id=$1) AS items', [b.id]);

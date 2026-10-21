@@ -15,8 +15,8 @@ const project = (o = {}) => ({ id: P, name: 'Riverside Offices', projectType: 'b
 const boq = (o = {}) => ({
   id: B, projectId: P, title: 'Ground floor works', description: 'Scope text', currency: 'INR', revision: 3, total: '50301.00', pricedItemCount: 2, unpricedItemCount: 0,
   items: [
-    { id: I1, position: 1, description: 'Brickwork', specifications: 'Class A', quantity: '10.000', unit: 'm3', estimatedRate: '5000.00', lineTotal: '50000.00' },
-    { id: I2, position: 2, description: 'Plaster', specifications: null, quantity: '2.500', unit: 'm2', estimatedRate: '120.40', lineTotal: '301.00' },
+    { id: I1, position: 1, description: 'Brickwork', specifications: 'Class A', quantity: '10.000', unit: 'm3', estimatedUnitRate: '5000.00', lineTotal: '50000.00' },
+    { id: I2, position: 2, description: 'Plaster', specifications: null, quantity: '2.500', unit: 'm2', estimatedUnitRate: '120.40', lineTotal: '301.00' },
   ],
   project: { id: P, name: 'Riverside Offices', clientName: 'Acme', location: { city: 'Noida', state: 'UP', postalCode: null }, currency: 'INR', isDemo: false },
   createdAt: '2026-10-01T10:00:00.000Z', updatedAt: '2026-10-02T10:00:00.000Z', ...o,
@@ -170,7 +170,7 @@ describe('BOQ editor - create', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Ground floor works' })).toBeInTheDocument();
     const posts = calls(`POST /api/projects/${P}/boqs`);
     expect(posts).toHaveLength(1);
-    expect(JSON.parse(posts[0]![1].body)).toEqual({ title: 'Ground floor works', description: null, items: [{ id: null, description: 'Brickwork', specifications: null, quantity: '10', unit: 'm3', estimatedRate: '5000' }] });
+    expect(JSON.parse(posts[0]![1].body)).toEqual({ title: 'Ground floor works', description: null, items: [{ id: null, description: 'Brickwork', specifications: null, quantity: '10', unit: 'm3', estimatedUnitRate: '5000' }] });
     expect(await screen.findByText(/Created BOQ/)).toBeInTheDocument();
     expect(screen.getByRole('article', { name: /preview/i })).toBeInTheDocument();
   });
@@ -243,8 +243,8 @@ describe('BOQ editor - edit existing', () => {
     expect(JSON.parse(put[1].body)).toEqual({
       title: 'Ground floor works', description: 'Scope text', revision: 3,
       items: [
-        { id: I1, description: 'Brickwork', specifications: 'Class A', quantity: '12', unit: 'm3', estimatedRate: '5000.00' },
-        { id: I2, description: 'Plaster', specifications: null, quantity: '2.5', unit: 'm2', estimatedRate: '120.40' },
+        { id: I1, description: 'Brickwork', specifications: 'Class A', quantity: '12', unit: 'm3', estimatedUnitRate: '5000.00' },
+        { id: I2, description: 'Plaster', specifications: null, quantity: '2.5', unit: 'm2', estimatedUnitRate: '120.40' },
       ],
     });
     expect(await screen.findByText(/Saved "Ground floor works" \(revision 4\)/)).toBeInTheDocument();
@@ -286,7 +286,7 @@ describe('BOQ preview, PDF download and delete', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('renders the document preview with all columns, exact amounts, draft marking and unpriced note', async () => {
-    api({ [`GET /api/boqs/${B}`]: () => json({ data: boq({ unpricedItemCount: 1, items: [...boq().items, { id: 'x', position: 3, description: 'Pending <b>item</b> & more', specifications: null, quantity: '1.000', unit: 'lump_sum', estimatedRate: null, lineTotal: null }] }) }) });
+    api({ [`GET /api/boqs/${B}`]: () => json({ data: boq({ unpricedItemCount: 1, items: [...boq().items, { id: 'x', position: 3, description: 'Pending <b>item</b> & more', specifications: null, quantity: '1.000', unit: 'lump_sum', estimatedUnitRate: null, lineTotal: null }] }) }) });
     renderAt(`/boqs/${B}`);
     const paper = await screen.findByRole('article', { name: /preview/i });
     for (const t of ['DRAFT - not an approved or issued tender document', 'Riverside Offices', 'Acme', 'Noida, UP', 'Scope text', 'Brickwork', 'Class A', 'Plaster', 'Rate (INR)', 'Amount (INR)', '₹5,000.00', '₹50,000.00', '₹301.00', '₹120.40', 'lump sum', 'Pending <b>item</b> & more', 'Estimated total (base)', '₹50,301']) {
