@@ -36,7 +36,8 @@ const create = async (over: Record<string, unknown> = {}) => {
 };
 
 beforeAll(async () => { await runMigrations(pool); });
-beforeEach(async () => { await pool.query('TRUNCATE projects'); });
+// CASCADE: boqs/boq_items reference projects (Feature 2)
+beforeEach(async () => { await pool.query('TRUNCATE projects CASCADE'); });
 afterAll(async () => { await pool.end(); });
 
 describe('POST /api/projects', () => {

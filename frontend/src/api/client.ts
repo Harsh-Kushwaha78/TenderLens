@@ -43,3 +43,22 @@ export async function apiRequest<T>(
   }
   return payload as T;
 }
+
+/** Fetches a binary body (e.g. PDF). Errors use the same ApiClientError mapping as JSON requests. */
+export async function apiBlob(path: string, signal?: AbortSignal): Promise<{ blob: Blob; filename: string | null }> {
+  let res: Response;
+  try {
+    res = await fetch(`${BASE}${path}`, { headers: { Accept: 'application/pdf, application/json' }, signal });
+  } catch (err) {
+    if ((err as Error)?.name === 'AbortError') throw err;
+    throw new ApiClientError(0, 'NETWORK_ERROR', 'Cannot reach the TenderLens server. Check that the API is running and try again.');
+  }
+  if (!res.ok) {
+    let payload: any = null;
+    try { payload = await res.json(); } catch { /* not JSON */ }
+    const e = payload?.error;
+    throw new ApiClientError(res.status, e?.code ?? 'UNEXPECTED_ERROR', e?.message ?? `Request failed (HTTP ${res.status}).`, e?.details ?? []);
+  }
+  const m = /filename="?([^";]+)"?/i.exec(res.headers.get('Content-Disposition') ?? '');
+  return { blob: await res.blob(), filename: m?.[1] ?? null };
+}

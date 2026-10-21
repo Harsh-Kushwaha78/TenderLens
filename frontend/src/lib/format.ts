@@ -12,6 +12,15 @@ export function formatMoney(value: DecimalString, currency: Currency | string): 
   }
 }
 
+/** Fixed 2 decimals (e.g. "₹120.40"), used wherever BOQ rates/amounts must read exactly like the PDF. Decimal STRING in, no float. */
+export function formatMoneyFixed(value: DecimalString, currency: Currency | string): string {
+  try {
+    return new Intl.NumberFormat(LOCALE, { style: 'currency', currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value as unknown as number);
+  } catch {
+    return `${currency} ${value}`;
+  }
+}
+
 /** Display-only compact form for chart axes/labels (converts to Number; never used for arithmetic). */
 export function formatCompact(value: DecimalString | number, currency?: Currency | string): string {
   const n = typeof value === 'number' ? value : Number(value);

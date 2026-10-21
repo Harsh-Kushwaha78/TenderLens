@@ -1,10 +1,8 @@
-export type ErrorCode =
-  | 'VALIDATION_ERROR'
-  | 'BAD_REQUEST'
-  | 'NOT_FOUND'
-  | 'INVALID_STATUS_TRANSITION'
-  | 'SERVICE_UNAVAILABLE'
-  | 'INTERNAL_ERROR';
+export const ERROR_CODES = [
+  'VALIDATION_ERROR', 'BAD_REQUEST', 'NOT_FOUND', 'INVALID_STATUS_TRANSITION', 'CONFLICT',
+  'UNSUPPORTED_CHARACTERS', 'DOCUMENT_GENERATION_FAILED', 'SERVICE_UNAVAILABLE', 'INTERNAL_ERROR',
+] as const;
+export type ErrorCode = (typeof ERROR_CODES)[number];
 
 export interface ErrorDetail {
   field?: string;

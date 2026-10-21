@@ -1,10 +1,11 @@
-import { BarChart3, Calendar, FileText, ListChecks, MapPin, Pencil, Receipt, SearchX, UserRound } from 'lucide-react';
+import { BarChart3, Calendar, ClipboardList, FileText, ListChecks, MapPin, Pencil, Plus, Receipt, SearchX, UserRound } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
+import { listBoqs } from '../api/boqs';
 import { getProject } from '../api/projects';
 import { Card, DemoBadge, EmptyState, ErrorState, LinkButton, PageHeader, Skeleton, StatusBadge } from '../components/ui';
 import { useAsync, useDocumentTitle } from '../hooks/hooks';
 import { TYPE_LABELS } from '../lib/constants';
-import { daysBetween, formatDate, formatDateTime, formatMoney, localToday, locationLabel } from '../lib/format';
+import { daysBetween, formatDate, formatDateTime, formatMoney, formatMoneyFixed, localToday, locationLabel } from '../lib/format';
 
 export function NotFoundPage({ what = 'page' }: { what?: string }) {
   useDocumentTitle('Not found');
@@ -17,7 +18,7 @@ export function NotFoundPage({ what = 'page' }: { what?: string }) {
 }
 
 const FUTURE = [
-  { icon: FileText, title: 'BOQ & documents', text: 'Generate BOQs and quotation requests; upload and review quotations.' },
+  { icon: FileText, title: 'Quotation requests & OCR', text: 'Generate quotation requests; upload and review quotations.' },
   { icon: BarChart3, title: 'Price benchmarking', text: 'Compare submitted rates with dated, sourced market observations.' },
   { icon: Receipt, title: 'Quotation comparison', text: 'Compare contractor quotations against BOQ items.' },
   { icon: ListChecks, title: 'Milestones & reconciliation', text: 'Track timeline, expenses, invoices and verified work.' },
@@ -27,6 +28,7 @@ export function ProjectDetailPage() {
   const { id = '' } = useParams();
   const { data: p, error, loading, reload } = useAsync((s) => getProject(id, s), [id]);
   useDocumentTitle(p?.name ?? 'Project');
+  const boqs = useAsync((s) => listBoqs(id, s), [id]);
 
   if (loading && !p) return <><PageHeader title="Loading project…" back={{ to: '/projects', label: 'Projects' }} /><div className="grid-3"><Skeleton height={110} /><Skeleton height={110} /><Skeleton height={110} /></div><Skeleton height={240} className="mt" /></>;
   if (error && (error as any).isNotFound) return <NotFoundPage what="project" />;
@@ -72,6 +74,15 @@ export function ProjectDetailPage() {
           <div className="progress-meta"><span>{formatDate(p.plannedStartDate)}</span><strong>{elapsed}% of schedule elapsed</strong><span>{formatDate(p.targetCompletionDate)}</span></div>
         </Card>
       </div>
+
+      <Card title="Bill of Quantities" subtitle="List work items, quantities and estimated rates, then export a PDF." className="mt"
+        actions={<span className="inline-meta"><LinkButton to={`/projects/${p.id}/boqs`}><ClipboardList size={16} aria-hidden="true" />Open BOQs{boqs.data ? ` (${boqs.data.length})` : ''}</LinkButton><LinkButton to={`/projects/${p.id}/boqs/new`} variant="primary"><Plus size={16} aria-hidden="true" />New BOQ</LinkButton></span>}>
+        {boqs.loading && !boqs.data ? <Skeleton height={20} width="60%" /> : boqs.error ? (
+          <p className="muted small" role="alert">Could not load BOQs: {boqs.error.message} <button type="button" className="link-btn" onClick={boqs.reload}>Retry</button></p>
+        ) : boqs.data && boqs.data.length > 0 ? (
+          <ul className="mini-list">{boqs.data.slice(0, 3).map((b) => <li key={b.id}><Link to={`/boqs/${b.id}`}>{b.title}</Link><span className="muted">{b.itemCount} items · {formatMoneyFixed(b.total, b.currency)}</span></li>)}</ul>
+        ) : <p className="muted small">No BOQs yet for this project.</p>}
+      </Card>
 
       <Card title="Project workspace - coming next" subtitle="Roadmap preview. None of these modules is implemented yet." className="mt">
         <div className="future-grid">

@@ -1,8 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import { RouterProvider, createMemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { App } from '../App';
+import { routes } from '../App';
 import { DemoProvider } from '../context/Demo';
 import { ToastProvider } from '../context/Toast';
 
@@ -23,7 +23,8 @@ const json = (body: unknown, status = 200) => Promise.resolve(new Response(JSON.
 const emptySummary = { asOfDate: '2026-10-17', timezone: 'UTC', includesDemoData: false, demoProjectCount: 0, totals: { totalProjects: 0, activeProjects: 0, approachingCompletion: 0, overdue: 0, approachingWindowDays: 30 }, plannedBudgetByCurrency: [], statusDistribution: [], budgetByProject: { currency: null, items: [] }, creationTrend: { sufficient: false, months: [] }, recentProjects: [] };
 
 function renderApp(route: string) {
-  return render(<MemoryRouter initialEntries={[route]}><DemoProvider><ToastProvider><App /></ToastProvider></DemoProvider></MemoryRouter>);
+  const router = createMemoryRouter(routes, { initialEntries: [route] });
+  return render(<DemoProvider><ToastProvider><RouterProvider router={router} /></ToastProvider></DemoProvider>);
 }
 
 let fetchMock: ReturnType<typeof vi.fn>;

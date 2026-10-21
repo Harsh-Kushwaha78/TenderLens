@@ -1,9 +1,9 @@
 openapi: 3.0.3
 info:
   title: TenderLens Main API
-  version: 0.1.0
+  version: 0.2.0
   description: |
-    Feature 1 (project foundation). DEVELOPMENT ONLY: no authentication or authorization exists yet.
+    Feature 1 (project foundation) + Feature 2 (BOQ builder and PDF documents). DEVELOPMENT ONLY: no authentication or authorization exists yet.
     Money values are decimal strings. Dates are `YYYY-MM-DD` calendar dates; timestamps are ISO 8601 UTC.
     Status values, transitions and project types are PROPOSED pending project-lead confirmation.
 servers: [{ url: http://localhost:4000 }]
@@ -60,6 +60,63 @@ paths:
       responses:
         '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/DashboardSummary' } } } } } }
         '400': { $ref: '#/components/responses/Error' }
+  /api/projects/{projectId}/boqs:
+    parameters: [{ name: projectId, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      summary: List the BOQs of a project (summaries with server-derived totals)
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/BoqSummary' } } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      summary: Create a BOQ (with its items) for an existing project
+      description: 'Atomic. The BOQ currency is copied from the project at creation. Items must not carry an id. Positions, line totals and the total are always derived by the server; sending them is a 400.'
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateBoq' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Boq' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/boqs/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      summary: Get a BOQ with its ordered items and project reference
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Boq' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    put:
+      summary: Replace a BOQ's metadata and items atomically
+      description: 'Full replacement guarded by optimistic concurrency: `revision` must equal the saved revision (else 409 CONFLICT). Items with an id must already belong to THIS BOQ (else 400); items without an id are created; saved items omitted from the request are deleted; order = array order. All-or-nothing in one transaction. Success increments `revision`.'
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateBoq' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Boq' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    delete:
+      summary: Delete a BOQ and its items (the project is unaffected)
+      responses:
+        '204': { description: Deleted }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/boqs/{id}/pdf:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      summary: Generate and download the BOQ as a PDF (from the SAVED data)
+      description: 'Generated on demand, never from client-supplied data; does not modify any data. If `revision` is given and differs from the saved revision the request fails with 409 so users never export something other than what they previewed. 422 UNSUPPORTED_CHARACTERS is returned (instead of a corrupted PDF) when text contains characters the embedded font (DejaVu Sans: Latin, Greek, Cyrillic, symbols such as the rupee sign) cannot draw, e.g. Devanagari or CJK.'
+      parameters:
+        - { name: revision, in: query, required: false, schema: { type: integer, minimum: 1 } }
+      responses:
+        '200':
+          description: PDF document
+          headers:
+            Content-Disposition: { schema: { type: string, example: 'attachment; filename="TenderLens-BOQ-1a2b3c4d-r3.pdf"' }, description: 'Filename = first 8 chars of the BOQ id + revision; never contains titles, client or project names.' }
+          content: { application/pdf: { schema: { type: string, format: binary } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '422': { $ref: '#/components/responses/Error' }
+        '500': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error: { description: Error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
@@ -156,6 +213,91 @@ components:
         error:
           type: object
           properties:
-            code: { type: string, enum: [VALIDATION_ERROR, BAD_REQUEST, NOT_FOUND, INVALID_STATUS_TRANSITION, SERVICE_UNAVAILABLE, INTERNAL_ERROR] }
+            code: { type: string, enum: [VALIDATION_ERROR, BAD_REQUEST, NOT_FOUND, INVALID_STATUS_TRANSITION, CONFLICT, UNSUPPORTED_CHARACTERS, DOCUMENT_GENERATION_FAILED, SERVICE_UNAVAILABLE, INTERNAL_ERROR] }
             message: { type: string }
             details: { type: array, items: { type: object, properties: { field: { type: string, example: location.city }, message: { type: string } } } }
+
+    BoqUnit: { type: string, enum: [m, m2, m3, sqft, kg, tonne, litre, piece, set, bag, day, lump_sum], description: 'Labels: m, m², m³, sq ft, kg, tonne, litre, piece, set, bag, day, lump sum' }
+    BoqQuantity: { type: string, pattern: '^(0|[1-9][0-9]{0,6})(\.[0-9]{1,3})?$', example: '12.500', description: 'Decimal string, > 0, max 7 whole digits and 3 decimals. Responses always have 3 decimals.' }
+    BoqRate: { type: string, pattern: '^(0|[1-9][0-9]{0,7})(\.[0-9]{1,2})?$', example: '1250.00', description: 'Decimal string >= 0 (0 allowed), max 8 whole digits and 2 decimals. Responses always have 2 decimals.' }
+    BoqItemInput:
+      type: object
+      additionalProperties: false
+      required: [description, quantity, unit]
+      properties:
+        id: { type: string, format: uuid, nullable: true, description: 'Omit/null for new items. On PUT, must be an existing item of this BOQ.' }
+        description: { type: string, minLength: 1, maxLength: 1000 }
+        specifications: { type: string, nullable: true, maxLength: 1000 }
+        quantity: { $ref: '#/components/schemas/BoqQuantity' }
+        unit: { $ref: '#/components/schemas/BoqUnit' }
+        estimatedUnitRate: { allOf: [{ $ref: '#/components/schemas/BoqRate' }], nullable: true, description: 'null/omitted = not estimated yet. This is NOT zero: the line total is null and the item is excluded from the BOQ total.' }
+    CreateBoq:
+      type: object
+      additionalProperties: false
+      required: [title, items]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 150 }
+        description: { type: string, nullable: true, maxLength: 2000, description: 'Scope of work' }
+        items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/BoqItemInput' } }
+    UpdateBoq:
+      type: object
+      additionalProperties: false
+      required: [title, items, revision]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 150 }
+        description: { type: string, nullable: true, maxLength: 2000 }
+        items: { type: array, maxItems: 500, items: { $ref: '#/components/schemas/BoqItemInput' } }
+        revision: { type: integer, minimum: 1, description: 'Revision the client loaded (optimistic concurrency).' }
+    BoqItem:
+      type: object
+      required: [id, position, description, specifications, quantity, unit, estimatedUnitRate, lineTotal, source]
+      properties:
+        id: { type: string, format: uuid }
+        position: { type: integer, minimum: 1, description: 'Server-assigned from array order (1..n)' }
+        description: { type: string }
+        specifications: { type: string, nullable: true }
+        quantity: { $ref: '#/components/schemas/BoqQuantity' }
+        unit: { $ref: '#/components/schemas/BoqUnit' }
+        estimatedUnitRate: { allOf: [{ $ref: '#/components/schemas/BoqRate' }], nullable: true }
+        source: { type: string, enum: [manual], description: 'Read-only origin of the item. Only `manual` exists until OCR/import features add values.' }
+        lineTotal: { allOf: [{ $ref: '#/components/schemas/Decimal' }], nullable: true, description: 'Derived by PostgreSQL as round(quantity * estimatedUnitRate, 2) (half-up); null when there is no rate. Never accepted from clients.' }
+    Boq:
+      type: object
+      required: [id, projectId, title, description, currency, revision, total, pricedItemCount, unpricedItemCount, items, project, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string, nullable: true }
+        currency: { allOf: [{ $ref: '#/components/schemas/Currency' }], description: 'Copied from the project when the BOQ was created; later project edits do not change it and amounts are never converted.' }
+        revision: { type: integer, description: 'Starts at 1; +1 on every successful PUT' }
+        total: { allOf: [{ $ref: '#/components/schemas/Decimal' }], description: 'Sum of line totals of priced items. Base total only: no taxes, overheads, contingency or other adjustments.' }
+        pricedItemCount: { type: integer }
+        unpricedItemCount: { type: integer }
+        items: { type: array, items: { $ref: '#/components/schemas/BoqItem' } }
+        project:
+          type: object
+          required: [id, name, clientName, location, currency, isDemo]
+          properties:
+            id: { type: string, format: uuid }
+            name: { type: string }
+            clientName: { type: string }
+            location: { type: object, properties: { city: { type: string }, state: { type: string }, postalCode: { type: string, nullable: true } } }
+            currency: { $ref: '#/components/schemas/Currency' }
+            isDemo: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    BoqSummary:
+      type: object
+      required: [id, projectId, title, currency, revision, itemCount, unpricedItemCount, total, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        projectId: { type: string, format: uuid }
+        title: { type: string }
+        currency: { $ref: '#/components/schemas/Currency' }
+        revision: { type: integer }
+        itemCount: { type: integer }
+        unpricedItemCount: { type: integer }
+        total: { $ref: '#/components/schemas/Decimal' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
