@@ -1,0 +1,21 @@
+# Local development PostgreSQL. NOT VERIFIED in the sandbox this was authored in (Docker was unavailable there);
+# run `docker compose up -d db` on a machine with Docker and report any problems.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-tenderlens}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env (see .env.example)}
+      POSTGRES_DB: ${POSTGRES_DB:-tenderlens}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - tenderlens_pgdata:/var/lib/postgresql/data
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tenderlens} -d ${POSTGRES_DB:-tenderlens}"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  tenderlens_pgdata:

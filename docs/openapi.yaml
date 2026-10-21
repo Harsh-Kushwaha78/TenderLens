@@ -1,0 +1,161 @@
+openapi: 3.0.3
+info:
+  title: TenderLens Main API
+  version: 0.1.0
+  description: |
+    Feature 1 (project foundation). DEVELOPMENT ONLY: no authentication or authorization exists yet.
+    Money values are decimal strings. Dates are `YYYY-MM-DD` calendar dates; timestamps are ISO 8601 UTC.
+    Status values, transitions and project types are PROPOSED pending project-lead confirmation.
+servers: [{ url: http://localhost:4000 }]
+paths:
+  /api/health:
+    get: { summary: Liveness and database check, responses: { '200': { description: OK }, '503': { $ref: '#/components/responses/Error' } } }
+  /api/projects:
+    post:
+      summary: Create a project
+      parameters:
+        - { name: Idempotency-Key, in: header, required: false, schema: { type: string, pattern: '^[A-Za-z0-9_-]{8,100}$' }, description: 'Repeating a key returns the originally created project (200, header Idempotent-Replayed: true) instead of creating a duplicate.' }
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/CreateProject' } } } }
+      responses:
+        '201': { description: Created, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Project' } } } } } }
+        '200': { description: Idempotent replay of an earlier create }
+        '400': { $ref: '#/components/responses/Error' }
+    get:
+      summary: List / search / filter / sort projects
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 100 }, description: 'Case-insensitive substring over name, clientName, location city and state. LIKE wildcards are treated literally.' }
+        - { name: status, in: query, schema: { type: string }, description: 'Comma-separated ProjectStatus values (or repeated param).' }
+        - { name: projectType, in: query, schema: { type: string }, description: 'Comma-separated ProjectType values.' }
+        - { name: sortBy, in: query, schema: { type: string, enum: [name, createdAt, plannedBudget, targetCompletionDate], default: createdAt }, description: 'plannedBudget sorts numerically but does not convert currencies.' }
+        - { name: sortOrder, in: query, schema: { type: string, enum: [asc, desc], default: desc } }
+        - { name: page, in: query, schema: { type: integer, minimum: 1, default: 1 } }
+        - { name: pageSize, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 10 } }
+        - { name: includeDemo, in: query, schema: { type: boolean, default: false }, description: 'Demo rows (isDemo=true) are excluded unless requested.' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { type: array, items: { $ref: '#/components/schemas/Project' } }, pagination: { $ref: '#/components/schemas/Pagination' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+  /api/projects/{id}:
+    parameters: [{ name: id, in: path, required: true, schema: { type: string, format: uuid } }]
+    get:
+      summary: Get a project
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Project' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    patch:
+      summary: Partially update a project
+      description: 'Only supplied fields change. `location` is replaced as a whole object. Dates are validated against stored values. Status changes must follow the allowed transitions (409 INVALID_STATUS_TRANSITION otherwise). id, isDemo, createdAt and updatedAt cannot be set.'
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/UpdateProject' } } } }
+      responses:
+        '200': { description: Updated, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/Project' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/dashboard/summary:
+    get:
+      summary: Dashboard metrics and chart data (computed from persisted rows)
+      parameters:
+        - { name: includeDemo, in: query, schema: { type: boolean, default: false } }
+        - { name: currency, in: query, schema: { $ref: '#/components/schemas/Currency' }, description: 'Currency for budgetByProject. Defaults to the currency with the most projects.' }
+      responses:
+        '200': { description: OK, content: { application/json: { schema: { type: object, properties: { data: { $ref: '#/components/schemas/DashboardSummary' } } } } } }
+        '400': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error: { description: Error, content: { application/json: { schema: { $ref: '#/components/schemas/ErrorBody' } } } }
+  schemas:
+    ProjectStatus: { type: string, enum: [draft, planning, active, on_hold, completed, cancelled] }
+    ProjectType: { type: string, enum: [building_renovation, interior_fitout, civil_works, electrical_works, plumbing_works, other] }
+    Currency: { type: string, enum: [INR, USD, EUR, GBP, AED] }
+    Decimal: { type: string, pattern: '^(0|[1-9][0-9]{0,12})(\.[0-9]{1,2})?$', example: '1000000.00', description: 'Decimal string, never a JSON number. Stored as NUMERIC(15,2); responses always have 2 fraction digits.' }
+    Location:
+      type: object
+      required: [city, state]
+      additionalProperties: false
+      properties: { city: { type: string, maxLength: 80 }, state: { type: string, maxLength: 80 }, postalCode: { type: string, nullable: true, description: '3-10 letters, digits, spaces or hyphens' } }
+    CreateProject:
+      type: object
+      additionalProperties: false
+      required: [name, projectType, clientName, location, plannedBudget, currency, plannedStartDate, targetCompletionDate]
+      properties:
+        name: { type: string, minLength: 3, maxLength: 120 }
+        projectType: { $ref: '#/components/schemas/ProjectType' }
+        clientName: { type: string, minLength: 2, maxLength: 120, description: 'Free text until the organization model exists.' }
+        location: { $ref: '#/components/schemas/Location' }
+        description: { type: string, maxLength: 2000, nullable: true, description: 'Optional scope summary.' }
+        plannedBudget: { allOf: [{ $ref: '#/components/schemas/Decimal' }], description: 'Must be > 0.' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        contingencyBudget: { allOf: [{ $ref: '#/components/schemas/Decimal' }], nullable: true, description: '>= 0 when provided.' }
+        plannedStartDate: { type: string, format: date }
+        targetCompletionDate: { type: string, format: date, description: 'Must be on or after plannedStartDate.' }
+        status: { type: string, enum: [draft, planning], default: draft }
+    UpdateProject:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string }
+        projectType: { $ref: '#/components/schemas/ProjectType' }
+        clientName: { type: string }
+        location: { $ref: '#/components/schemas/Location' }
+        description: { type: string, nullable: true }
+        plannedBudget: { $ref: '#/components/schemas/Decimal' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        contingencyBudget: { allOf: [{ $ref: '#/components/schemas/Decimal' }], nullable: true }
+        plannedStartDate: { type: string, format: date }
+        targetCompletionDate: { type: string, format: date }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+    Project:
+      type: object
+      required: [id, name, projectType, clientName, location, description, plannedBudget, currency, contingencyBudget, plannedStartDate, targetCompletionDate, status, isDemo, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        projectType: { $ref: '#/components/schemas/ProjectType' }
+        clientName: { type: string }
+        location: { type: object, properties: { city: { type: string }, state: { type: string }, postalCode: { type: string, nullable: true } } }
+        description: { type: string, nullable: true }
+        plannedBudget: { $ref: '#/components/schemas/Decimal' }
+        currency: { $ref: '#/components/schemas/Currency' }
+        contingencyBudget: { allOf: [{ $ref: '#/components/schemas/Decimal' }], nullable: true }
+        plannedStartDate: { type: string, format: date }
+        targetCompletionDate: { type: string, format: date }
+        status: { $ref: '#/components/schemas/ProjectStatus' }
+        isDemo: { type: boolean, description: 'True only for rows inserted by the dev demo seed script.' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    Pagination:
+      type: object
+      properties: { page: { type: integer }, pageSize: { type: integer }, totalItems: { type: integer }, totalPages: { type: integer, description: 'At least 1' } }
+    DashboardSummary:
+      type: object
+      properties:
+        asOfDate: { type: string, format: date, description: 'Server "today" in `timezone`' }
+        timezone: { type: string }
+        includesDemoData: { type: boolean }
+        demoProjectCount: { type: integer }
+        totals:
+          type: object
+          properties:
+            totalProjects: { type: integer }
+            activeProjects: { type: integer, description: "status = active" }
+            approachingCompletion: { type: integer, description: 'Open (planning/active/on_hold) projects with targetCompletionDate from today through today + approachingWindowDays' }
+            overdue: { type: integer, description: 'Open projects with targetCompletionDate before today' }
+            approachingWindowDays: { type: integer }
+        plannedBudgetByCurrency:
+          type: array
+          description: 'Exact NUMERIC sums per currency, excluding cancelled projects. Currencies are never combined or converted.'
+          items: { type: object, properties: { currency: { $ref: '#/components/schemas/Currency' }, total: { $ref: '#/components/schemas/Decimal' }, projectCount: { type: integer } } }
+        statusDistribution: { type: array, description: 'One entry per status (zeros included)', items: { type: object, properties: { status: { $ref: '#/components/schemas/ProjectStatus' }, count: { type: integer } } } }
+        budgetByProject: { type: object, properties: { currency: { allOf: [{ $ref: '#/components/schemas/Currency' }], nullable: true }, items: { type: array, description: 'Top 8 by plannedBudget in that currency, excluding cancelled', items: { type: object, properties: { id: { type: string }, name: { type: string }, plannedBudget: { $ref: '#/components/schemas/Decimal' } } } } } }
+        creationTrend: { type: object, description: 'sufficient=false unless >=5 projects exist across >=2 of the last 6 months; clients must show an empty state instead of a trend.', properties: { sufficient: { type: boolean }, months: { type: array, items: { type: object, properties: { month: { type: string, example: '2026-10' }, count: { type: integer } } } } } }
+        recentProjects: { type: array, items: { $ref: '#/components/schemas/Project' } }
+    ErrorBody:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string, enum: [VALIDATION_ERROR, BAD_REQUEST, NOT_FOUND, INVALID_STATUS_TRANSITION, SERVICE_UNAVAILABLE, INTERNAL_ERROR] }
+            message: { type: string }
+            details: { type: array, items: { type: object, properties: { field: { type: string, example: location.city }, message: { type: string } } } }
